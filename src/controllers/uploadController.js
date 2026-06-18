@@ -1,44 +1,40 @@
 // ─── Upload Controller ──────────────────────────────────────────────
-const path = require('path');
+const { Readable } = require('stream');
 const multer = require('multer');
+const cloudinary = require('../config/cloudinary');
 const asyncHandler = require('../utils/asyncHandler');
 const { success, error } = require('../utils/apiResponse');
 
-const UPLOADS_DIR = path.resolve(__dirname, '../../uploads');
+const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, UPLOADS_DIR),
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    cb(null, `${uniqueSuffix}${ext}`);
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_SIZE },
+  fileFilter: (req, file, cb) => {
+    if (ALLOWED_TYPES.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Only image files (jpeg, jpg, png, gif, webp) are allowed'));
   },
 });
 
-const fileFilter = (req, file, cb) => {
-  const allowed = /jpeg|jpg|png|gif|webp/;
-  const ext = allowed.test(path.extname(file.originalname).toLowerCase());
-  const mime = allowed.test(file.mimetype);
-  if (ext && mime) {
-    cb(null, true);
-  } else {
-    cb(new Error('Only image files (jpeg, jpg, png, gif, webp) are allowed'));
-  }
-};
-
-const upload = multer({
-  storage,
-  fileFilter,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
-});
-
-/** POST /api/upload — upload a single image */
+/** POST /api/upload — upload a single image to Cloudinary */
 const uploadImage = [
   upload.single('image'),
   asyncHandler(async (req, res) => {
     if (!req.file) return error(res, 'No image file provided', 400);
-    const url = `/uploads/${req.file.filename}`;
-    return success(res, { url, filename: req.file.filename }, 201);
+
+    const result = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        { folder: 'black-rabbit' },
+        (err, result) => {
+          if (err) reject(err);
+          else resolve(result);
+        }
+      );
+      Readable.from(req.file.buffer).pipe(stream);
+    });
+
+    return success(res, { url: result.secure_url, public_id: result.public_id }, 201);
   }),
 ];
 
