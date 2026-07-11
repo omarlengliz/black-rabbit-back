@@ -92,10 +92,10 @@ const uploadImage = [
         },
       });
 
-      // 3. Return the backend proxy URL (avoids Drive hotlink 403)
-      const proxyUrl = `/api/upload/image/${fileId}`;
+      // 3. Return the direct Google Drive view URL
+      const driveUrl = `https://drive.google.com/uc?export=view&id=${fileId}`;
 
-      return success(res, { url: proxyUrl, public_id: fileId }, 201);
+      return success(res, { url: driveUrl, public_id: fileId }, 201);
     } catch (err) {
       console.error('Google Drive Upload Error:', err);
       return error(res, 'Failed to upload image to Google Drive', 500);
